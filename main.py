@@ -163,6 +163,8 @@ def generate_audio(content):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
+    parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
+
     args = parser.parse_args()
 
     print("READIT To ME 1.0")
@@ -177,7 +179,11 @@ if __name__ == "__main__":
     print(f"Word Count from page:{word_count(contents)}")
     print(f"Tokens Estimate:{estimate_tokens(contents)}")
 
-    speech_filename = generate_filename_from_url(page)
+    if args.fixed_filename:
+        speech_filename = args.fixed_filename
+    else:
+        speech_filename = generate_filename_from_url(page)
+        
     output_dir = Path("path/to/your/output/directory")  # User-defined output directory
     speech_file_path = output_dir / speech_filename
     print("filepath path:", speech_file_path)
