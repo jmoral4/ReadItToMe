@@ -4,5 +4,6 @@
   "OUTPUT_DIR" : "path/to/your/directory",
   "SELECTED_MODEL" : "gpt-4-turbo-preview",
   "SELECTED_MODEL_TYPE" : "<can be openai, claude, or ollama, match with the above model>",
-  "OLLAMA_HOST" : "http://localhost:11434"
+  "OLLAMA_HOST" : "http://localhost:11434",
+  "AUDIO_VOICE" : "nova"
 }

@@ -138,11 +138,14 @@ def get_web_page_contents(url):
 
 
 def play_mp3(filepath):
-    pygame.mixer.init()
-    pygame.mixer.music.load(filepath)
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():  # Wait for the music to finish playing
-        pygame.time.Clock().tick(10)  # Tick the clock to wait
+    try:
+        pygame.mixer.init()
+        pygame.mixer.music.load(filepath)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():  # Wait for the music to finish playing
+            pygame.time.Clock().tick(10)  # Tick the clock to wait
+    except pygame.error as e:
+        print(f"An error occurred: {e}")
 
 
 def clean_and_shorten_text(text, max_length=10):
@@ -169,15 +172,23 @@ def word_count(string):
     return len(words)
 
 
-def generate_audio(content):
+def generate_audio(content, voice="nova"):
+    """
+    Voice Options: (alloy, echo, fable, onyx, nova, and shimmer)
+    https://platform.openai.com/docs/guides/text-to-speech
+    """
+    if voice is None:
+        voice = "nova"
+
     client = OpenAI(api_key=API_KEY)
-    print("Generating Audio!")
+    print(f"Generating Audio with {voice} Voice")
     audio_resp = client.audio.speech.create(
         model="tts-1",
-        voice="nova",
+        voice= voice,
         input=f"{content}"
     )
     audio_resp.stream_to_file(speech_file_path)
+
 
 if __name__ == "__main__":
 
@@ -189,6 +200,7 @@ if __name__ == "__main__":
         SELECTED_MODEL = config['SELECTED_MODEL']
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
         OLLAMA_HOST = config['OLLAMA_HOST']
+        AUDIO_VOICE = config['AUDIO_VOICE']
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
@@ -234,7 +246,7 @@ if __name__ == "__main__":
     if not args.silent:
         play_mp3('genaudio.mp3')
 
-    generate_audio(resp)
+    generate_audio(resp, AUDIO_VOICE)
     print("Audio generated! Now Playing.")
 
     # Path to your MP3 file
