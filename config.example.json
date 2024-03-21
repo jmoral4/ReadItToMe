@@ -1,0 +1,7 @@
+{
+  "CLAUDE_KEY": "",
+  "OPENAI_KEY" : "",
+  "OUTPUT_DIR" : "",
+  "SELECTED_MODEL" : "gpt-4-turbo-preview",
+  "SELECTED_MODEL_TYPE" : "<can be openai, claude, or ollama, match with the above model>"
+}

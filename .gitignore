@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 config.json
 **/config.json
-
+.idea/
 # C extensions
 *.so
 

@@ -6,9 +6,8 @@ import pygame
 from urllib.parse import urlparse, unquote
 import anthropic
 import argparse
+import json
 
-CLAUDE_KEY = '<CLAUDE KEY>'
-API_KEY='<OPENAI KEY>'
 
 # ANSI escape codes for some colors
 RED = "\033[31m"
@@ -33,22 +32,39 @@ def estimate_tokens(text):
     return len(text) // 4
 
 
-def talk_to_ai(prompt, model, color, api_type='openai', temperature=1, max_tokens=720, top_p=1, frequency_penalty=0,
+def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_tokens=720, top_p=1, frequency_penalty=0,
                presence_penalty=0, system_prompt=None):
 
     """
     Model Options:
-    gpt-4-0125-preview     (GPT-4 turbo)
+    See OpenAi Models here for latest: https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo
+    gpt-4-turbo-preview    (GPT-4 turbo used in Pro subscription, most modern model, 128k context 4k response)
+    gpt-4                  (GPT-4 8k context)
+    gpt-4-32k              (GPT-4-32k context)
+    gpt-3.5-turbo          (GPT-3.5 turbo latest model, 16k context)
+
+
+    See Claude Models here for latest: https://docs.anthropic.com/claude/docs/models-overview
     claude-3-opus-20240229     (pro membership, strongest model)
     claude-3-sonnet-20240229   (powers the free claude, general purpose GPT-4 tier)
     claude-3-haiku-20240307    (small, fast, GPT-3 tier)
     """
 
+    base_sys_prompt = "You are a helpful AI assistant named ROBOT. Provide concise answers to simple questions and thorough responses to complex, open-ended queries."
+
     if system_prompt is None and api_type == 'claude':
-        system_prompt = "You are a helpful AI assistant named Claude. Provide concise answers to simple questions and thorough responses to complex, open-ended queries."
+        system_prompt = base_sys_prompt.replace('ROBOT', 'Claude')
+    elif system_prompt is None and api_type == 'openai':
+        system_prompt = base_sys_prompt.replace('ROBOT', 'ChatGPT')
+
+    print("Using System Prompt:", system_prompt)
 
     if api_type == 'ollama':
         print(f"Using OLLAMA model: {model} for AI")
+        prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
+            Content:
+            {content}    
+        """
         base_url = f'{OLLAMA_HOST}/v1/'
         api_key = 'ollama'
         client = OpenAI(base_url=base_url, api_key=api_key)
@@ -58,6 +74,10 @@ def talk_to_ai(prompt, model, color, api_type='openai', temperature=1, max_token
         }
     elif api_type == 'claude':
         print(f"Using Claude model: {model} for AI")
+        prompt = f"""Please synthesize and provide a detailed overview of the following webpage content.               
+               Webpage Content:
+               {content}    
+           """
         api_key = CLAUDE_KEY
         client = anthropic.Anthropic(api_key=api_key)
         response_params = {
@@ -69,16 +89,20 @@ def talk_to_ai(prompt, model, color, api_type='openai', temperature=1, max_token
         }
     else:  # Default to GPT
         print(f"Using OpenAI model: {model} for AI")
+        # special prompt for GPT-4 which gets hung up on 'not having internet access to summarize'
+        prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
+               Content:
+               {content}    
+           """
+        #print_colored(f"DEBUG Query:{prompt}", YELLOW)
         api_key = API_KEY
         client = OpenAI(api_key=api_key)
         response_params = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "top_p": top_p,
-            "frequency_penalty": frequency_penalty,
-            "presence_penalty": presence_penalty
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": max_tokens
         }
 
     # Create response based on API type
@@ -161,6 +185,15 @@ def generate_audio(content):
     audio_resp.stream_to_file(speech_file_path)
 
 if __name__ == "__main__":
+
+    with open('config.json') as config_file:
+        config = json.load(config_file)
+        CLAUDE_KEY = config['CLAUDE_KEY']
+        API_KEY = config['OPENAI_KEY']
+        OUTPUT_DIR = config['OUTPUT_DIR']
+        SELECTED_MODEL = config['SELECTED_MODEL']
+        SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
+
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
     parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
@@ -173,7 +206,7 @@ if __name__ == "__main__":
     if args.url:
         page = args.url
     else:
-        page = r"https://news.ycombinator.com/item?id=39765718"  #very large discussion used for testing
+        page = r"https://news.ycombinator.com/item?id=39766170"  #very large discussion used for testing
 
     contents = get_web_page_contents(page)
     print(f"Word Count from page:{word_count(contents)}")
@@ -183,23 +216,16 @@ if __name__ == "__main__":
         speech_filename = args.fixed_filename
     else:
         speech_filename = generate_filename_from_url(page)
-        
-    output_dir = Path("path/to/your/output/directory")  # User-defined output directory
+
+    output_dir = Path(OUTPUT_DIR)
     speech_file_path = output_dir / speech_filename
     print("filepath path:", speech_file_path)
 
     play_mp3('summary.mp3')
     print(f'Summarizing:{page}')
-    prompt = f"""Please synthesize and provide a detailed overview of the following webpage contents.               
-        Webpage Contents Below:
-        {contents}    
-    """
-
-    claude_model_name = "claude-3-opus-20240229"    #api_type= 'claude'
-    gpt4_model_name = "gpt-4-0125-preview"          #api_type = 'openai'
 
     #remember to change both the model AND the api_type. In the future this can be a tuple or auto-detected
-    resp = talk_to_ai(prompt, claude_model_name, GREEN, 'claude')
+    resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE)
 
     print(f"SUMMARY:{resp}")
 
