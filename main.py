@@ -7,6 +7,7 @@ from urllib.parse import urlparse, unquote
 import anthropic
 import argparse
 import json
+from halo import Halo
 
 
 # ANSI escape codes for some colors
@@ -19,6 +20,9 @@ CYAN = "\033[36m"
 WHITE = "\033[37m"
 RESET = "\033[0m"  # Resets the color to default
 
+# used for more tailored spinner sequances
+spinner = Halo(spinner='dots')
+
 def print_colored(text, color):
     print(f"{color}{text}{RESET}")
 
@@ -27,9 +31,8 @@ def estimate_tokens(text):
     return len(text) // 4
 
 
-def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_tokens=720, top_p=1, frequency_penalty=0,
+def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_tokens=2000, top_p=1, frequency_penalty=0,
                presence_penalty=0, system_prompt=None):
-
     """
     Model Options:
     See OpenAi Models here for latest: https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo
@@ -44,75 +47,80 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
     claude-3-sonnet-20240229   (powers the free claude, general purpose GPT-4 tier)
     claude-3-haiku-20240307    (small, fast, GPT-3 tier)
     """
+    try:
+        base_sys_prompt = "You are a helpful AI assistant named ROBOT. Provide concise answers to simple questions and thorough responses to complex, open-ended queries."
 
-    base_sys_prompt = "You are a helpful AI assistant named ROBOT. Provide concise answers to simple questions and thorough responses to complex, open-ended queries."
+        if system_prompt is None and api_type == 'claude':
+            system_prompt = base_sys_prompt.replace('ROBOT', 'Claude')
+        elif system_prompt is None and api_type == 'openai':
+            system_prompt = base_sys_prompt.replace('ROBOT', 'ChatGPT')
 
-    if system_prompt is None and api_type == 'claude':
-        system_prompt = base_sys_prompt.replace('ROBOT', 'Claude')
-    elif system_prompt is None and api_type == 'openai':
-        system_prompt = base_sys_prompt.replace('ROBOT', 'ChatGPT')
+        print("Using System Prompt:", system_prompt)
+        spinner.text = f"Generating Summary using {api_type} {model}"
+        spinner.start()
+        if api_type == 'ollama':
+            prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
+                Content:
+                {content}    
+            """
+            base_url = f'{OLLAMA_HOST}/v1/'
+            api_key = 'ollama'
+            client = OpenAI(base_url=base_url, api_key=api_key)
+            response_params = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+        elif api_type == 'claude':
+            prompt = f"""Please synthesize and provide a detailed overview of the following webpage content.               
+                   Webpage Content:
+                   {content}    
+               """
+            api_key = CLAUDE_KEY
+            client = anthropic.Anthropic(api_key=api_key)
+            response_params = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+        else:  # Default to GPT
+            # special prompt for GPT-4 which gets hung up on 'not having internet access to summarize'
+            prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
+                   Content:
+                   {content}    
+               """
+            #print_colored(f"DEBUG Query:{prompt}", YELLOW)
+            api_key = API_KEY
+            client = OpenAI(api_key=api_key)
+            response_params = {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": max_tokens
+            }
 
-    print("Using System Prompt:", system_prompt)
+        # Create response based on API type
+        if api_type in ['ollama', 'openai']:
+            response = client.chat.completions.create(**response_params)
+            message_content = response.choices[0].message.content
+        else:  # Claude
+            message = client.messages.create(**response_params)
+            message_content = message.content
 
-    if api_type == 'ollama':
-        print(f"Using OLLAMA model: {model} for AI")
-        prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
-            Content:
-            {content}    
-        """
-        base_url = f'{OLLAMA_HOST}/v1/'
-        api_key = 'ollama'
-        client = OpenAI(base_url=base_url, api_key=api_key)
-        response_params = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
-    elif api_type == 'claude':
-        print(f"Using Claude model: {model} for AI")
-        prompt = f"""Please synthesize and provide a detailed overview of the following webpage content.               
-               Webpage Content:
-               {content}    
-           """
-        api_key = CLAUDE_KEY
-        client = anthropic.Anthropic(api_key=api_key)
-        response_params = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": prompt}]
-        }
-    else:  # Default to GPT
-        print(f"Using OpenAI model: {model} for AI")
-        # special prompt for GPT-4 which gets hung up on 'not having internet access to summarize'
-        prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
-               Content:
-               {content}    
-           """
-        #print_colored(f"DEBUG Query:{prompt}", YELLOW)
-        api_key = API_KEY
-        client = OpenAI(api_key=api_key)
-        response_params = {
-            "model": model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": max_tokens
-        }
+        # Process and print the response
+        print_colored(f"{model}:", color)
+        print_colored(message_content, color)
 
-    # Create response based on API type
-    if api_type in ['ollama', 'openai']:
-        response = client.chat.completions.create(**response_params)
-        message_content = response.choices[0].message.content
-    else:  # Claude
-        message = client.messages.create(**response_params)
-        message_content = message.content
-
-    # Process and print the response
-    print_colored(f"{model}:", color)
-    print_colored(message_content, color)
-
-    return message_content
+        spinner.stop()
+        return message_content
+    except Exception as e:
+        spinner.fail(f"Failed due to {e}")
+        raise
+    finally:
+        if spinner.spinner_id:
+            spinner.stop()
 
 
 def get_web_page_contents(url):
@@ -172,6 +180,7 @@ def word_count(string):
     return len(words)
 
 
+@Halo(text='Generating Audio', spinner='dots')
 def generate_audio(content, voice="nova"):
     """
     Voice Options: (alloy, echo, fable, onyx, nova, and shimmer)
@@ -181,7 +190,6 @@ def generate_audio(content, voice="nova"):
         voice = "nova"
 
     client = OpenAI(api_key=API_KEY)
-    print(f"Generating Audio with {voice} Voice")
     audio_resp = client.audio.speech.create(
         model="tts-1",
         voice= voice,
@@ -201,6 +209,7 @@ if __name__ == "__main__":
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
         OLLAMA_HOST = config['OLLAMA_HOST']
         AUDIO_VOICE = config['AUDIO_VOICE']
+        MAX_TOKENS = config['MAX_RESPONSE_TOKENS']
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
@@ -239,20 +248,24 @@ if __name__ == "__main__":
     print(f'Summarizing:{page}')
 
     #remember to change both the model AND the api_type. In the future this can be a tuple or auto-detected
-    resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE)
+    resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE, max_tokens=MAX_TOKENS)
 
     print(f"SUMMARY:{resp}")
 
     if not args.silent:
         play_mp3('genaudio.mp3')
 
+    print(f"Generating Audio with {AUDIO_VOICE} Voice")
     generate_audio(resp, AUDIO_VOICE)
     print("Audio generated! Now Playing.")
 
     # Path to your MP3 file
     if not args.download_only:
-        print("Now Playing.")
+        # only show the spinner for the final playbck (the others are less than 2seconds)
+        spinner.text = 'Now Playing'
+        spinner.start()
         play_mp3(str(speech_file_path))
+        spinner.stop()
 
     print("Done!")
 
