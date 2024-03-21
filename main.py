@@ -19,11 +19,6 @@ CYAN = "\033[36m"
 WHITE = "\033[37m"
 RESET = "\033[0m"  # Resets the color to default
 
-REMOTE_OLLAMA_HOST = "http://..."
-LOCAL_OLLAMA_HOST = "http://localhost:11434"
-OLLAMA_HOST = LOCAL_OLLAMA_HOST  #switch this to LOCAL_OLLAMA_HOST if testing locally
-
-
 def print_colored(text, color):
     print(f"{color}{text}{RESET}")
 
@@ -193,6 +188,7 @@ if __name__ == "__main__":
         OUTPUT_DIR = config['OUTPUT_DIR']
         SELECTED_MODEL = config['SELECTED_MODEL']
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
+        OLLAMA_HOST = config['OLLAMA_HOST']
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
@@ -210,7 +206,7 @@ if __name__ == "__main__":
     if args.url:
         page = args.url
     else:
-        page = r"https://news.ycombinator.com/item?id=39766170"  #very large discussion used for testing
+        page = r"https://news.ycombinator.com/item?id=39766170"  # large discussion used for testing
 
     contents = get_web_page_contents(page)
     print(f"Word Count from page:{word_count(contents)}")
