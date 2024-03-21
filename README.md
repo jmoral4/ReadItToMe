@@ -7,7 +7,11 @@ Python app to generate detailed summaries of web pages and then generate ai voic
 * Support for Ollama Models (Mistral, Llama2, etc)
 
 ## Optional CLI usage
-python main.py --url "https://example.com/page"
+Specify Url
+> python main.py --url "https://example.com/page"
+
+Specify a filename (to reuse the same file, otherwise, one file per webpage is generated)
+> python main.py --fixed-filename "summary.mp3" 
 
 ## Config
 * Update the output_dir to your desired path
