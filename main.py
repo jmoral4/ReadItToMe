@@ -196,13 +196,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
+    parser.add_argument("--download-only", help="Only download the audio files, no playback", default=None)
+    parser.add_argument("--silent", help="Don't vocalize actions being performed", default=None)
     parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
 
     args = parser.parse_args()
 
     print("READIT To ME 1.0")
 
-    play_mp3('gettingcontent.mp3')
+    if not args.silent:
+        play_mp3('gettingcontent.mp3')
+
     if args.url:
         page = args.url
     else:
@@ -221,7 +225,9 @@ if __name__ == "__main__":
     speech_file_path = output_dir / speech_filename
     print("filepath path:", speech_file_path)
 
-    play_mp3('summary.mp3')
+    if not args.silent:
+        play_mp3('summary.mp3')
+
     print(f'Summarizing:{page}')
 
     #remember to change both the model AND the api_type. In the future this can be a tuple or auto-detected
@@ -229,12 +235,17 @@ if __name__ == "__main__":
 
     print(f"SUMMARY:{resp}")
 
-    play_mp3('genaudio.mp3')
+    if not args.silent:
+        play_mp3('genaudio.mp3')
 
     generate_audio(resp)
     print("Audio generated! Now Playing.")
+
     # Path to your MP3 file
-    play_mp3(str(speech_file_path))
+    if not args.download_only:
+        print("Now Playing.")
+        play_mp3(str(speech_file_path))
+
     print("Done!")
 
 
