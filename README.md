@@ -4,7 +4,7 @@ Why use ReadItToMe rather than a screen reader? I built this tool for two major 
 1. Reading research papers and large web content in a smart way (don't read ads, don't read menus, etc etc).
 2. Reading large forums and summarizing the findings, consensus, insights, etc.
 
-In these cases, it blows a stock screenreader out of the water. 
+In these cases, it blows a standard screenreader out of the water. 
 
 Next step, a Chromium based plugin.
 
