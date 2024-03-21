@@ -4,9 +4,7 @@ Why use ReadItToMe rather than a screen reader? I built this tool for two major 
 1. Reading research papers and large web content in a smart way (don't read ads, don't read menus, etc etc).
 2. Reading large forums and summarizing the findings, consensus, insights, etc.
 
-In these cases, it blows a standard screenreader out of the water. 
-
-Next step, a Chromium based plugin.
+In these cases, it blows a standard screenreader out of the water.
 
 ## Features
 * Support for OpenAI models  (GPT-3/GPT-4)
@@ -26,12 +24,23 @@ Flags
 
 ## Setup
 * Copy or Rename config.example.json to config.json
-* Add your keys for an ai models. OpenAI key is _required_ for OpenAi's natural text to speech which is the main feature of this app. (may support other platforms in the future)
+* Add your keys for models. OpenAI key is _required_ for OpenAi's natural text to speech which is the main feature of this app. (may support other platforms in the future)
 * Add your output directory - this is where audio files generated for playback will be stored
-* Add your selected model and model type (openai, claude, ollama)
+* Add your selected model and model type for text summarization (openai, claude, ollama)
+
+## Technical Decisions
+Disclaimer: I'm not a daily Python coder
+* Opted to use Pygame for audio playback as it provided the most seamless user experience (other approaches required convoluted FFMPEG setup on Windows)
+* Opted for OpenAI's voice - I personally enjoy the natural way they sound including vocal mannerisms. 
 
 ## Practical Notes
 * In general, requires models with 16k+ context sizes in order to be useful (GPT-3.5-turbo, GPT-4-Turbo, Claude-2, Claude-3)
+* MAX_RESPONSE_TOKENS config setting determines how thorough or concise the summary is. Expand this if you prefer a deeper dive.
 * Not all Ollama models support large context sizes.
-* In practice Mistral was passable but most small/medium models did poorly or require tweaking. YMMV!
-* Claude-3 and GPT-4 did exceptionally well due to the large context sizes (turbo and recollect quality)
+* In practice Mistral was passable but most small/medium models (7B or less) did poorly or required tweaking to deliver useful summaries. YMMV!
+* Claude-3 and GPT-4 did exceptionally well due to the large context sizes and recollect quality
+
+## Roadmap
+* Chromium and FF based plugins (investigating)
+* Support for Mistral Pro (subscription based)
+* Support for multiple audio generation models

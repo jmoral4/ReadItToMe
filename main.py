@@ -227,7 +227,7 @@ if __name__ == "__main__":
     if args.url:
         page = args.url
     else:
-        page = r"https://news.ycombinator.com/item?id=39766170"  # large discussion used for testing
+        page = r"https://news.ycombinator.com/item?id=39766170"  # large-ish discussion used for testing
 
     contents = get_web_page_contents(page)
     print(f"Word Count from page:{word_count(contents)}")

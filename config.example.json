@@ -1,10 +1,10 @@
 {
-  "CLAUDE_KEY": "",
-  "OPENAI_KEY" : "",
+  "CLAUDE_KEY": "(optional) key for claude",
+  "OPENAI_KEY" : "(required) openAI key",
   "OUTPUT_DIR" : "path/to/your/directory",
-  "SELECTED_MODEL" : "gpt-4-turbo-preview",
-  "SELECTED_MODEL_TYPE" : "<can be openai, claude, or ollama, match with the above model>",
-  "OLLAMA_HOST" : "http://localhost:11434",
-  "AUDIO_VOICE" : "nova",
+  "SELECTED_MODEL" : "CHOOSE ONE (see source for links to lists of models): gpt-4-turbo-preview gpt-4 gpt-4-32k gpt-3.5-turbo claude-3-opus-20240229 claude-3-sonnet-20240229",
+  "SELECTED_MODEL_TYPE" : "CHOOSE ONE: openai, claude, or ollama, (match with the above model)",
+  "OLLAMA_HOST" : " (optional) http://localhost:11434",
+  "AUDIO_VOICE" : "(Choose one, see source for previews) alloy, echo, fable, onyx, nova, and shimmer",
   "MAX_RESPONSE_TOKENS" : 720
 }
