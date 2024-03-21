@@ -5,7 +5,7 @@ from pathlib import Path
 import pygame
 from urllib.parse import urlparse, unquote
 import anthropic
-
+import argparse
 
 CLAUDE_KEY = '<CLAUDE KEY>'
 API_KEY='<OPENAI KEY>'
@@ -161,17 +161,25 @@ def generate_audio(content):
     audio_resp.stream_to_file(speech_file_path)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="READIT To ME 1.0")
+    parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
+    args = parser.parse_args()
 
     print("READIT To ME 1.0")
 
     play_mp3('gettingcontent.mp3')
-    page = r"https://news.ycombinator.com/item?id=39765718"  #very large discussion used for testing
+    if args.url:
+        page = args.url
+    else:
+        page = r"https://news.ycombinator.com/item?id=39765718"  #very large discussion used for testing
+
     contents = get_web_page_contents(page)
     print(f"Word Count from page:{word_count(contents)}")
     print(f"Tokens Estimate:{estimate_tokens(contents)}")
 
     speech_filename = generate_filename_from_url(page)
-    speech_file_path = Path(r"C:\git\PersonalTools") / speech_filename
+    output_dir = Path("path/to/your/output/directory")  # User-defined output directory
+    speech_file_path = output_dir / speech_filename
     print("filepath path:", speech_file_path)
 
     play_mp3('summary.mp3')
