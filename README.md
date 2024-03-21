@@ -6,3 +6,14 @@ Python app to generate detailed summaries of web pages and then generate ai voic
 * Support for Anthropic models (Claude-2/3)
 * Support for Ollama Models (Mistral, Llama2, etc)
 
+## Optional CLI usage
+python main.py --url "https://example.com/page"
+
+## Config
+* Update the output_dir to your desired path
+* Add your own OpenAI/anthropic key or use Ollama for free!
+
+## Practical Notes
+* Not all Ollama models support large context sizes.
+* In practice Mistral was passable but most small/medium models did poorly or require tweaking. YMMV!
+* Claude-3 and GPT-4 did exceptionally well due to the large context sizes (turbo and recollect quality)
