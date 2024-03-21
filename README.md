@@ -1,5 +1,12 @@
 # ReadItToMe
-Python app to generate detailed summaries of web pages and then generate ai voice tracks that can read them back to you.
+Why use ReadItToMe rather than a screen reader? I built this tool for two major use cases.
+
+1. Reading research papers and large web content in a smart way (don't read ads, don't read menus, etc etc).
+2. Reading large forums and summarizing the findings, consensus, insights, etc.
+
+In these cases, it blows a stock screenreader out of the water. 
+
+Next step, a Chromium based plugin.
 
 ## Features
 * Support for OpenAI models  (GPT-3/GPT-4)
