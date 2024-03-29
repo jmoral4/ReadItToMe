@@ -36,6 +36,7 @@ class Program
     private static string SELECTED_MODEL_TYPE;
     private static string OLLAMA_HOST;
     private static string AUDIO_VOICE;
+    private static int MAX_TOKENS;
 
     static async Task Main(string[] args)
     {
@@ -47,6 +48,7 @@ class Program
         SELECTED_MODEL_TYPE = config["SELECTED_MODEL_TYPE"].ToString();
         OLLAMA_HOST = config["OLLAMA_HOST"].ToString();
         AUDIO_VOICE = config["AUDIO_VOICE"].ToString();
+        MAX_TOKENS = Int32.Parse(config["MAX_RESPONSE_TOKENS"].ToString());
 
         string url = null;
         bool downloadOnly = false;
@@ -66,13 +68,14 @@ class Program
                 fixedFilename = args[++i];
         }
 
-        Console.WriteLine("READIT To ME 1.0");
+        Console.WriteLine("READIT To ME 1.0.");
+        Console.WriteLine($"Env: SELECTED_MODEL:{SELECTED_MODEL}, AUDIO_VOICE:{AUDIO_VOICE}, MAX_TOKENS:{MAX_TOKENS}");
 
         if (!silent)
             PlayMp3("gettingcontent.mp3");
 
         if (url == null)
-            url = "https://news.ycombinator.com/item?id=39766170";  // large discussion used for testing
+            url = "https://news.ycombinator.com/item?id=39865810";  // large discussion used for testing
 
         var contents = await GetWebPageContentsAsync(url);
         Console.WriteLine($"Word Count from page: {WordCount(contents)}");
@@ -87,7 +90,7 @@ class Program
 
         Console.WriteLine($"Summarizing: {url}");
 
-        var resp = await TalkToAIAsync(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE);
+        var resp = await TalkToAIAsync(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE, maxTokens: MAX_TOKENS);
 
         Console.WriteLine($"SUMMARY: {resp}");
 
