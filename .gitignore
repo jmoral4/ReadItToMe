@@ -8,6 +8,11 @@ config.json
 # C extensions
 *.so
 
+# CS files 
+.vs/
+bin/
+obj/
+
 # Distribution / packaging
 .Python
 build/
