@@ -29,13 +29,13 @@ Flags
 * Add your selected model and model type for text summarization (openai, claude, ollama)
 
 ## Technical Decisions
-Disclaimer: I'm not a daily Python coder
-* Opted to use Pygame for audio playback as it provided the most seamless user experience (other approaches required convoluted FFMPEG setup on Windows)
+Disclaimer: I'm not a daily Python coder but ironically the core implementation is in Python via experimentation and backported to C# via Claude 3.0 and hand fixup.
+* Opted to use Pygame for audio playback in Python as it provided the most seamless user experience (other approaches required convoluted FFMPEG setup on Windows)
 * Opted for OpenAI's voice - I personally enjoy the natural way they sound including vocal mannerisms. 
 
 ## Practical Notes
+* **MAX_RESPONSE_TOKENS** has a very strong effect on how thorough or concise the summary is. At 720, you'll get a reasonable and detailed overview if the story is brief. I personally use 3072 since I use it for large stories or HackerNews threads. Expand this if you prefer a deeper dive - to the limits of your model. Of course, this has a direct effect on cost-per-query.
 * In general, requires models with 16k+ context sizes in order to be useful (GPT-3.5-turbo, GPT-4-Turbo, Claude-2, Claude-3)
-* MAX_RESPONSE_TOKENS config setting determines how thorough or concise the summary is. Expand this if you prefer a deeper dive.
 * Not all Ollama models support large context sizes.
 * In practice Mistral was passable but most small/medium models (7B or less) did poorly or required tweaking to deliver useful summaries. YMMV!
 * Claude-3 and GPT-4 did exceptionally well due to the large context sizes and recollect quality
