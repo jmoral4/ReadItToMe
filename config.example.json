@@ -6,5 +6,5 @@
   "SELECTED_MODEL_TYPE" : "CHOOSE ONE: openai, claude, or ollama, (match with the above model)",
   "OLLAMA_HOST" : " (optional) http://localhost:11434",
   "AUDIO_VOICE" : "(Choose one, see source for previews) alloy, echo, fable, onyx, nova, and shimmer",
-  "MAX_RESPONSE_TOKENS" : 720
+  "MAX_RESPONSE_TOKENS" : 2000
 }

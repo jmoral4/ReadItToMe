@@ -9,7 +9,6 @@ import argparse
 import json
 from halo import Halo
 
-
 # ANSI escape codes for some colors
 RED = "\033[31m"
 GREEN = "\033[32m"
@@ -126,20 +125,13 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
 def get_web_page_contents(url):
 
     try:
-        # Define headers with a User-Agent
+        # Define headers with a User-Agent (to get around issues where we're blocked by agent) --updated agent
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0'
         }
-
-        # Sending a GET request to the URL with headers
         response = requests.get(url, headers=headers)
-        # Checking if the request was successful
         response.raise_for_status()
-
-        # Parsing the content of the page with BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
-
-        # Extracting and returning the text from the parsed HTML
         return soup.get_text(separator=' ', strip=True)
     except requests.RequestException as e:
         return str(e)
@@ -163,14 +155,23 @@ def clean_and_shorten_text(text, max_length=10):
         return clean_text[:max_length]
     return clean_text
 
-
 def generate_filename_from_url(url):
     parsed_url = urlparse(url)
-    # Extract domain name and path, optionally you can include other parts like 'path'
-    domain_name = parsed_url.netloc.split('.')[-2]  # Usually gives the meaningful part of the domain
+    domain_name = parsed_url.netloc.split('.')[-2]  # Get the meaningful part of the domain
     path_parts = parsed_url.path.split('/')
-    meaningful_parts = [clean_and_shorten_text(part) for part in path_parts if part][:2]  # Take the first 2 meaningful parts of the path
-    filename_parts = [clean_and_shorten_text(domain_name)] + meaningful_parts
+    meaningful_parts = [clean_and_shorten_text(part) for part in path_parts if part][
+                       :2]  # First 2 meaningful parts of the path
+
+    # Process query string
+    query_string = parsed_url.query
+    query_params = []
+    if query_string:
+        params = query_string.split('&')
+        for param in params:
+            key, value = param.split('=')
+            query_params.append(clean_and_shorten_text(value))
+
+    filename_parts = [clean_and_shorten_text(domain_name)] + meaningful_parts + query_params
     filename = "_".join(filename_parts)
     return f"{filename}.mp3"
 
@@ -181,7 +182,7 @@ def word_count(string):
 
 
 @Halo(text='Generating Audio', spinner='dots')
-def generate_audio(content, voice="nova"):
+def generate_audio(content, speech_file_path, voice="nova"):
     """
     Voice Options: (alloy, echo, fable, onyx, nova, and shimmer)
     https://platform.openai.com/docs/guides/text-to-speech
@@ -196,6 +197,61 @@ def generate_audio(content, voice="nova"):
         input=f"{content}"
     )
     audio_resp.stream_to_file(speech_file_path)
+
+
+def process_single_url(url, output_dir, fixed_filename=None):
+    if fixed_filename:
+        speech_filename = fixed_filename
+    else:
+        speech_filename = generate_filename_from_url(url)
+
+    speech_file_path = Path(output_dir) / speech_filename
+
+    if not args.silent:
+        play_mp3('gettingcontent.mp3')
+
+    page = url
+    contents = get_web_page_contents(page)
+    print(f"Word Count from page:{word_count(contents)}")
+    print(f"Tokens Estimate:{estimate_tokens(contents)}")
+    print("filepath path:", speech_file_path)
+
+    if not args.silent:
+        play_mp3('summary.mp3')
+
+    print(f'Summarizing:{page}')
+
+    # remember to change both the model AND the api_type. In the future this can be a tuple or auto-detected
+    resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE, max_tokens=MAX_TOKENS)
+
+    print(f"SUMMARY:{resp}")
+
+    if not args.silent:
+        play_mp3('genaudio.mp3')
+
+    print(f"Generating Audio with {AUDIO_VOICE} Voice")
+    generate_audio(resp, speech_file_path, AUDIO_VOICE)
+    print("Audio generated! Now Playing.")
+
+    # Path to your MP3 file
+    if not args.download_only:
+        # only show the spinner for the final playbck (the others are less than 2seconds)
+        spinner.text = 'Now Playing'
+        spinner.start()
+        play_mp3(str(speech_file_path))
+        spinner.stop()
+
+
+def read_file_and_split(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            # Read the file and split into an array of lines
+            lines = file.read().splitlines()
+            return lines
+    except FileNotFoundError:
+        print(f"The file at {file_path} was not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
 if __name__ == "__main__":
@@ -213,61 +269,30 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
-    parser.add_argument("--download-only", help="Only download the audio files, no playback", default=None)
-    parser.add_argument("--silent", help="Don't vocalize actions being performed", default=None)
     parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
+    parser.add_argument("--playlist", help="Supply a list of urls to be generated and played in sequence", default=None)
+    parser.add_argument("--download-only", help="Only download the audio files, no playback", action='store_true', default=False)
+    parser.add_argument("--silent", help="Don't vocalize actions being performed", action='store_true', default=False)
 
     args = parser.parse_args()
 
     print("READIT To ME 1.0")
 
-    if not args.silent:
-        play_mp3('gettingcontent.mp3')
-
-    if args.url:
+    if args.url is not None:
+        # overrides playlist mode if enabled
+        print(f"Single File Play Mode Enabled (url:{args.url}")
         page = args.url
-    else:
-        page = r"https://news.ycombinator.com/item?id=39766170"  # large-ish discussion used for testing
+        # for testing
+        # page = r"https://replicationindex.com/2017/02/02/reconstruction-of-a-train-wreck-how-priming-research-went-of-the-rails/"  # large-ish discussion used for testing
+        process_single_url(page, OUTPUT_DIR, args.fixed_filename)
+    elif args.playlist is not None:
+        print(f"Playlist Mode Enabled: {args.playlist}")
+        url_list = read_file_and_split(args.playlist)
+        for url in url_list:
+            print(f"Playing: {url}")
+            process_single_url(url, OUTPUT_DIR, args.fixed_filename)
 
-    contents = get_web_page_contents(page)
-    print(f"Word Count from page:{word_count(contents)}")
-    print(f"Tokens Estimate:{estimate_tokens(contents)}")
-
-    if args.fixed_filename:
-        speech_filename = args.fixed_filename
-    else:
-        speech_filename = generate_filename_from_url(page)
-
-    output_dir = Path(OUTPUT_DIR)
-    speech_file_path = output_dir / speech_filename
-    print("filepath path:", speech_file_path)
-
-    if not args.silent:
-        play_mp3('summary.mp3')
-
-    print(f'Summarizing:{page}')
-
-    #remember to change both the model AND the api_type. In the future this can be a tuple or auto-detected
-    resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE, max_tokens=MAX_TOKENS)
-
-    print(f"SUMMARY:{resp}")
-
-    if not args.silent:
-        play_mp3('genaudio.mp3')
-
-    print(f"Generating Audio with {AUDIO_VOICE} Voice")
-    generate_audio(resp, AUDIO_VOICE)
-    print("Audio generated! Now Playing.")
-
-    # Path to your MP3 file
-    if not args.download_only:
-        # only show the spinner for the final playbck (the others are less than 2seconds)
-        spinner.text = 'Now Playing'
-        spinner.start()
-        play_mp3(str(speech_file_path))
-        spinner.stop()
-
-    print("Done!")
+    print("ALL Done!")
 
 
 
