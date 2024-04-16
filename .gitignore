@@ -13,6 +13,9 @@ config.json
 bin/
 obj/
 
+/output
+output/
+
 # Distribution / packaging
 .Python
 build/

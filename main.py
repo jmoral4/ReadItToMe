@@ -199,6 +199,30 @@ def generate_audio(content, speech_file_path, voice="nova"):
     audio_resp.stream_to_file(speech_file_path)
 
 
+def save_summary(speech_file_path, summary_text):
+    """
+    Saves the provided summary text to a file with the same base name as the speech file,
+    but with a .txt extension.
+
+    Parameters:
+    - speech_file_path (Path or str): The path to the audio file, used to derive the text file's name.
+    - summary_text (str): The summary text to be saved.
+
+    """
+    # Ensure the speech_file_path is a Path object for easier manipulation
+    if not isinstance(speech_file_path, Path):
+        speech_file_path = Path(speech_file_path)
+
+    # Generate the text file path by changing the extension
+    text_file_path = speech_file_path.with_suffix('.txt')
+
+    # Write the summary text to the new file
+    with open(text_file_path, 'w', encoding='utf-8') as file:
+        file.write(summary_text)
+
+    print(f"Summary saved to: {text_file_path}")
+
+
 def process_single_url(url, output_dir, fixed_filename=None):
     if fixed_filename:
         speech_filename = fixed_filename
@@ -225,6 +249,8 @@ def process_single_url(url, output_dir, fixed_filename=None):
     resp = talk_to_ai(contents, SELECTED_MODEL, GREEN, SELECTED_MODEL_TYPE, max_tokens=MAX_TOKENS)
 
     print(f"SUMMARY:{resp}")
+    if args.save_summaries:
+        save_summary(speech_file_path, resp)
 
     if not args.silent:
         play_mp3('genaudio.mp3')
@@ -250,8 +276,10 @@ def read_file_and_split(file_path):
             return lines
     except FileNotFoundError:
         print(f"The file at {file_path} was not found.")
+        return None
     except Exception as e:
         print(f"An error occurred: {e}")
+        return None
 
 
 if __name__ == "__main__":
@@ -271,6 +299,7 @@ if __name__ == "__main__":
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
     parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
     parser.add_argument("--playlist", help="Supply a list of urls to be generated and played in sequence", default=None)
+    parser.add_argument("--save-summaries", help="Save summaries to files named similar to the media files", default=None)
     parser.add_argument("--download-only", help="Only download the audio files, no playback", action='store_true', default=False)
     parser.add_argument("--silent", help="Don't vocalize actions being performed", action='store_true', default=False)
 
@@ -288,9 +317,10 @@ if __name__ == "__main__":
     elif args.playlist is not None:
         print(f"Playlist Mode Enabled: {args.playlist}")
         url_list = read_file_and_split(args.playlist)
-        for url in url_list:
-            print(f"Playing: {url}")
-            process_single_url(url, OUTPUT_DIR, args.fixed_filename)
+        if url_list is not None:
+            for url in url_list:
+                print(f"Playing: {url}")
+                process_single_url(url, OUTPUT_DIR, args.fixed_filename)
 
     print("ALL Done!")
 
