@@ -13,10 +13,16 @@ In these cases, it blows a standard screenreader out of the water.
 
 ## Optional CLI usage
 Specify Url
-> python main.py --url "https://example.com/page"
+> py main.py --url "https://example.com/page"
 
 Specify a filename (to reuse the same file. By default one file per webpage is generated)
-> python main.py --fixed-filename "summary.mp3"
+> py main.py --fixed-filename "summary.mp3"
+
+Specify a 'playlist' or file with multiple urls, one per line, to process. Can be combined with --silent and --download-only to setup a playlist for later listening. 
+> py main.py --playlist \your\directory\playlist.txt
+
+Save the AI generated summaries for later viewing
+> py main.py --save-summaries \output\dir
 
 Flags
 * --silent  (Don't vocalize the actions being performed)
