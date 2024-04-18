@@ -28,6 +28,9 @@ Flags
 * --silent  (Don't vocalize the actions being performed)
 * --download-only  (Only download the audio files, don't play them back (useful for bulk creating a playlist))
 
+### Example (Download a playlist for use in a media player)
+py main.py --playlist C:\git\HNplaylist.txt --download-only --silent
+
 ## Setup
 * Copy or Rename config.example.json to config.json
 * Add your keys for models. OpenAI key is _required_ for OpenAi's natural text to speech which is the main feature of this app. (may support other platforms in the future)
@@ -48,5 +51,5 @@ Disclaimer: I'm not a daily Python coder but ironically the core implementation 
 
 ## Roadmap
 * Chromium and FF based plugins (investigating)
-* Support for Mistral Pro (subscription based)
+* Better tested support for specific local models (ollama, oobabooga, or anything that supports the OpenAI api)
 * Support for multiple audio generation models
