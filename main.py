@@ -306,8 +306,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("READIT To ME 1.0")
-    args.playlist = r"C:\git\PersonalTools\playlist.txt"
-    args.download_only = True
 
     if args.url is not None:
         # overrides playlist mode if enabled
