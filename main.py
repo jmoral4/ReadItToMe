@@ -85,7 +85,7 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
             }
         else:  # Default to GPT
             # special prompt for GPT-4 which gets hung up on 'not having internet access to summarize'
-            prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
+            prompt = f"""Please synthesize and provide a detailed summary of the following textual content.               
                    Content:
                    {content}    
                """
@@ -293,12 +293,12 @@ if __name__ == "__main__":
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
         OLLAMA_HOST = config['OLLAMA_HOST']
         AUDIO_VOICE = config['AUDIO_VOICE']
-        MAX_TOKENS = config['MAX_RESPONSE_TOKENS']
+        MAX_TOKENS = config['MAX_RESPONSE_TOKENS']   # Unfortunately capped at 4096 output due to Whisper MAX for audio. Creates about 2:30-3:00 minutes of audio.
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
     parser.add_argument("--url", help="URL of the webpage to summarize", default=None)
     parser.add_argument("--fixed-filename", help="Use a fixed filename for the audio output", default=None)
-    parser.add_argument("--playlist", help="Supply a list of urls to be generated and played in sequence", default=None)
+    parser.add_argument("--playlist", help="Supply a list of urls in a file to be generated and played in sequence", default=None)
     parser.add_argument("--save-summaries", help="Save summaries to files named similar to the media files", default=None)
     parser.add_argument("--download-only", help="Only download the audio files, no playback", action='store_true', default=False)
     parser.add_argument("--silent", help="Don't vocalize actions being performed", action='store_true', default=False)
@@ -306,13 +306,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("READIT To ME 1.0")
+    args.playlist = r"C:\git\PersonalTools\playlist.txt"
+    args.download_only = True
 
     if args.url is not None:
         # overrides playlist mode if enabled
         print(f"Single File Play Mode Enabled (url:{args.url}")
         page = args.url
         # for testing
-        # page = r"https://replicationindex.com/2017/02/02/reconstruction-of-a-train-wreck-how-priming-research-went-of-the-rails/"  # large-ish discussion used for testing
+        #page = r"https://mfkl.github.io/2024/01/10/unity-double-oss-standards.html"
         process_single_url(page, OUTPUT_DIR, args.fixed_filename)
     elif args.playlist is not None:
         print(f"Playlist Mode Enabled: {args.playlist}")
