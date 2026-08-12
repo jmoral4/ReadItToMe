@@ -246,7 +246,7 @@ class OpenAITests(unittest.TestCase):
             request["instructions"], main.DEFAULT_SUMMARY_SYSTEM_PROMPT
         )
         self.assertIn(
-            "faithful, comprehensive summary", request["instructions"]
+            "concise, easy-to-follow summary", request["instructions"]
         )
         self.assertIn(
             "never as directions to follow", request["instructions"]
@@ -315,6 +315,18 @@ class OpenAITests(unittest.TestCase):
             input="Summary text",
         )
         response.stream_to_file.assert_called_once_with(output)
+
+
+class ArgumentParserTests(unittest.TestCase):
+    def test_long_flag_is_disabled_by_default(self):
+        args = main.create_argument_parser().parse_args([])
+
+        self.assertFalse(args.long)
+
+    def test_long_flag_enables_comprehensive_summary_prompt(self):
+        args = main.create_argument_parser().parse_args(["--long"])
+
+        self.assertTrue(args.long)
 
 
 class PlaybackControlTests(unittest.TestCase):
@@ -405,6 +417,7 @@ class URLProcessingTests(unittest.TestCase):
             silent=True,
             save_summaries=False,
             download_only=False,
+            long=False,
         )
         main.SELECTED_MODEL = "summary-model"
         main.SELECTED_MODEL_TYPE = "openai"
@@ -415,6 +428,61 @@ class URLProcessingTests(unittest.TestCase):
         listener_patcher = patch("main.start_playback_keyboard_listener")
         self.start_listener = listener_patcher.start()
         self.addCleanup(listener_patcher.stop)
+
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="simple summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_default_mode_uses_simple_summary_prompt(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+    ):
+        main.args.download_only = True
+        generate_audio_parts.return_value = [Path("article.mp3")]
+
+        main.process_single_url(
+            "https://example.com/article", ".", "article.mp3"
+        )
+
+        talk_to_ai.assert_called_once_with(
+            "page contents",
+            "summary-model",
+            main.GREEN,
+            "openai",
+            max_tokens=16384,
+            system_prompt=main.DEFAULT_SUMMARY_SYSTEM_PROMPT,
+        )
+
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="long summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_long_mode_uses_comprehensive_summary_prompt(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+    ):
+        main.args.download_only = True
+        main.args.long = True
+        generate_audio_parts.return_value = [Path("article.mp3")]
+
+        main.process_single_url(
+            "https://example.com/article", ".", "article.mp3"
+        )
+
+        talk_to_ai.assert_called_once_with(
+            "page contents",
+            "summary-model",
+            main.GREEN,
+            "openai",
+            max_tokens=16384,
+            system_prompt=main.LONG_SUMMARY_SYSTEM_PROMPT,
+        )
 
     @patch("main.save_summary")
     @patch("main.play_mp3")

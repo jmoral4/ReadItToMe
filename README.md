@@ -31,6 +31,7 @@ Save the AI generated summaries for later viewing
 Flags
 * --silent  (Don't vocalize the actions being performed)
 * --download-only  (Only download the audio files, don't play them back (useful for bulk creating a playlist))
+* --long  (Favor comprehensive, detailed coverage instead of the concise default)
 
 During generated-summary playback on Windows, press Space to pause or resume
 from the current position. This control is not started in download-only mode.
@@ -55,7 +56,7 @@ Disclaimer: I'm not a daily Python coder but ironically the core implementation 
 * Opted for OpenAI's voice - I personally enjoy the natural way they sound including vocal mannerisms. 
 
 ## Practical Notes
-* **MAX_RESPONSE_TOKENS** controls the summarization model's output limit and defaults to 16384 in the example configuration. Larger values can increase summary depth, model cost, generation time, audio duration, and the number of text-to-speech requests. Keep the value within the selected OpenAI, Claude, or Ollama model's supported output limit.
+* **MAX_RESPONSE_TOKENS** controls the summarization model's output limit and defaults to 8096 in the example configuration. Larger values can increase summary depth, model cost, generation time, audio duration, and the number of text-to-speech requests. Keep the value within the selected OpenAI, Claude, or Ollama model's supported output limit.
 * Audio generation is chunked independently of **MAX_RESPONSE_TOKENS**. The app targets 3800 characters and 1800 tokens per request, safely below the speech API's 4096-character limit and the `gpt-4o-mini-tts` 2000-token limit. The number of resulting MP3 files depends on the generated text, not directly on the configured summary token limit.
 * `--download-only` generates every numbered part without playing any of them. When playback is enabled, each completed part is queued and played in numeric order while later parts are still generating.
 * `--save-summaries` always writes one complete, unsuffixed `.txt` summary even when the audio uses multiple numbered files.
