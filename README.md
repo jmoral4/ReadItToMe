@@ -7,9 +7,9 @@ Why use ReadItToMe rather than a screen reader? I built this tool for two major 
 In these cases, it blows a standard screenreader out of the water.
 
 ## Features
-* Support for OpenAI models  (GPT-3/GPT-4)
-* Support for Anthropic models (Claude-2/3)
-* Support for Ollama Models (Mistral, Llama2, etc)
+* Support for current OpenAI models through the Responses API
+* Support for Anthropic Claude models
+* Support for Ollama models through its OpenAI-compatible API
 
 ## Optional CLI usage
 Specify Url
@@ -32,10 +32,14 @@ Flags
 py main.py --playlist C:\git\HNplaylist.txt --download-only --silent
 
 ## Setup
+* Requires Python 3.10 or newer.
+* Install the Python dependencies with `py -m pip install -r requirements.txt`.
 * Copy or Rename config.example.json to config.json
-* Add your keys for models. OpenAI key is _required_ for OpenAi's natural text to speech which is the main feature of this app. (may support other platforms in the future)
+* Add your keys for models. An OpenAI key is _required_ for OpenAI text to speech, which is the main feature of this app.
 * Add your output directory - this is where audio files generated for playback will be stored
 * Add your selected model and model type for text summarization (openai, claude, ollama)
+* `gpt-5.6-sol` is the recommended OpenAI summarization model. Use `gpt-5.6-terra` for a balance of intelligence and cost, or `gpt-5.6-luna` for cost-sensitive workloads.
+* `gpt-4o-mini-tts` is OpenAI's current speech model. `marin` and `cedar` are the recommended voices.
 
 ## Technical Decisions
 Disclaimer: I'm not a daily Python coder but ironically the core implementation is in Python via experimentation and backported to C# via Claude 3.0 and hand fixup.
@@ -44,10 +48,10 @@ Disclaimer: I'm not a daily Python coder but ironically the core implementation 
 
 ## Practical Notes
 * **MAX_RESPONSE_TOKENS** has a very strong effect on how thorough or concise the summary is. At 720, you'll get a reasonable and detailed overview if the story is brief. I personally use 3072 since I use it for large stories or HackerNews threads. Expand this if you prefer a deeper dive - to the limits of your model. Of course, this has a direct effect on cost-per-query.
-* In general, requires models with 16k+ context sizes in order to be useful (GPT-3.5-turbo, GPT-4-Turbo, Claude-2, Claude-3)
+* In general, models with large context windows produce the most useful summaries.
 * Not all Ollama models support large context sizes.
 * In practice Mistral was passable but most small/medium models (7B or less) did poorly or required tweaking to deliver useful summaries. YMMV!
-* Claude-3 and GPT-4 did exceptionally well due to the large context sizes and recollect quality
+* Current Claude and GPT models work especially well because of their large context windows and recall quality.
 
 ## Roadmap
 * Chromium and FF based plugins (investigating)

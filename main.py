@@ -33,18 +33,8 @@ def estimate_tokens(text):
 def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_tokens=2000, top_p=1, frequency_penalty=0,
                presence_penalty=0, system_prompt=None):
     """
-    Model Options:
-    See OpenAi Models here for latest: https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo
-    gpt-4-turbo-preview    (GPT-4 turbo used in Pro subscription, most modern model, 128k context 4k response)
-    gpt-4                  (GPT-4 8k context)
-    gpt-4-32k              (GPT-4-32k context)
-    gpt-3.5-turbo          (GPT-3.5 turbo latest model, 16k context)
-
-
-    See Claude Models here for latest: https://docs.anthropic.com/claude/docs/models-overview
-    claude-3-opus-20240229     (pro membership, strongest model)
-    claude-3-sonnet-20240229   (powers the free claude, general purpose GPT-4 tier)
-    claude-3-haiku-20240307    (small, fast, GPT-3 tier)
+    Summarize content with OpenAI's Responses API, Anthropic, or an
+    OpenAI-compatible local Ollama server.
     """
     try:
         base_sys_prompt = "You are a helpful AI assistant named ROBOT. Provide concise answers to simple questions and thorough responses to complex, open-ended queries."
@@ -58,22 +48,25 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
         spinner.text = f"Generating Summary using {api_type} {model}"
         spinner.start()
         if api_type == 'ollama':
-            prompt = f"""Please synthesize and provide a detailed overview of the following textual content.               
-                Content:
-                {content}    
-            """
+            prompt = (
+                "Please synthesize and provide a detailed overview of the "
+                f"following textual content.\n\nContent:\n{content}"
+            )
             base_url = f'{OLLAMA_HOST}/v1/'
             api_key = 'ollama'
             client = OpenAI(base_url=base_url, api_key=api_key)
             response_params = {
                 "model": model,
-                "messages": [{"role": "user", "content": prompt}]
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
             }
         elif api_type == 'claude':
-            prompt = f"""Please synthesize and provide a detailed overview of the following webpage content.               
-                   Webpage Content:
-                   {content}    
-               """
+            prompt = (
+                "Please synthesize and provide a detailed overview of the "
+                f"following webpage content.\n\nWebpage Content:\n{content}"
+            )
             api_key = CLAUDE_KEY
             client = anthropic.Anthropic(api_key=api_key)
             response_params = {
@@ -84,29 +77,34 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
                 "messages": [{"role": "user", "content": prompt}]
             }
         else:  # Default to GPT
-            # special prompt for GPT-4 which gets hung up on 'not having internet access to summarize'
-            prompt = f"""Please synthesize and provide a detailed summary of the following textual content.               
-                   Content:
-                   {content}    
-               """
-            #print_colored(f"DEBUG Query:{prompt}", YELLOW)
+            prompt = (
+                "Please synthesize and provide a detailed summary of the "
+                f"following textual content.\n\nContent:\n{content}"
+            )
             api_key = API_KEY
             client = OpenAI(api_key=api_key)
             response_params = {
                 "model": model,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": max_tokens
+                "instructions": system_prompt,
+                "input": prompt,
+                "max_output_tokens": max_tokens
             }
 
         # Create response based on API type
-        if api_type in ['ollama', 'openai']:
+        if api_type == 'openai':
+            response = client.responses.create(**response_params)
+            message_content = response.output_text
+        elif api_type == 'ollama':
             response = client.chat.completions.create(**response_params)
             message_content = response.choices[0].message.content
         else:  # Claude
             message = client.messages.create(**response_params)
-            message_content = message.content
+            message_content = "".join(
+                block.text for block in message.content if block.type == "text"
+            )
+
+        if not message_content:
+            raise RuntimeError(f"{api_type} returned no text")
 
         # Process and print the response
         print_colored(f"{model}:", color)
@@ -182,21 +180,22 @@ def word_count(string):
 
 
 @Halo(text='Generating Audio', spinner='dots')
-def generate_audio(content, speech_file_path, voice="nova"):
+def generate_audio(content, speech_file_path, voice="nova", model="gpt-4o-mini-tts"):
     """
-    Voice Options: (alloy, echo, fable, onyx, nova, and shimmer)
+    Voice Options: alloy, ash, ballad, coral, cedar, echo, fable, marin,
+    nova, onyx, sage, shimmer, and verse.
     https://platform.openai.com/docs/guides/text-to-speech
     """
     if voice is None:
         voice = "nova"
 
     client = OpenAI(api_key=API_KEY)
-    audio_resp = client.audio.speech.create(
-        model="tts-1",
-        voice= voice,
-        input=f"{content}"
-    )
-    audio_resp.stream_to_file(speech_file_path)
+    with client.audio.speech.with_streaming_response.create(
+        model=model,
+        voice=voice,
+        input=content
+    ) as response:
+        response.stream_to_file(speech_file_path)
 
 
 def save_summary(speech_file_path, summary_text):
@@ -256,7 +255,7 @@ def process_single_url(url, output_dir, fixed_filename=None):
         play_mp3('genaudio.mp3')
 
     print(f"Generating Audio with {AUDIO_VOICE} Voice")
-    generate_audio(resp, speech_file_path, AUDIO_VOICE)
+    generate_audio(resp, speech_file_path, AUDIO_VOICE, AUDIO_MODEL)
     print("Audio generated! Now Playing.")
 
     # Path to your MP3 file
@@ -293,6 +292,7 @@ if __name__ == "__main__":
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
         OLLAMA_HOST = config['OLLAMA_HOST']
         AUDIO_VOICE = config['AUDIO_VOICE']
+        AUDIO_MODEL = config.get('AUDIO_MODEL', 'gpt-4o-mini-tts')
         MAX_TOKENS = config['MAX_RESPONSE_TOKENS']   # Unfortunately capped at 4096 output due to Whisper MAX for audio. Creates about 2:30-3:00 minutes of audio.
 
     parser = argparse.ArgumentParser(description="READIT To ME 1.0")
@@ -323,8 +323,6 @@ if __name__ == "__main__":
                 process_single_url(url, OUTPUT_DIR, args.fixed_filename)
 
     print("ALL Done!")
-
-
 
 
 
