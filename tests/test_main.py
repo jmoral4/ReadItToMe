@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -163,6 +164,36 @@ class AudioPartTests(unittest.TestCase):
             self.assertEqual(request[2:], ("marin", "gpt-4o-mini-tts"))
 
     @patch("main.generate_audio")
+    @patch("main.split_text_for_tts", return_value=["one", "two"])
+    def test_completed_parts_are_reported_as_ready_in_order(
+        self, split_text, generate_audio
+    ):
+        generate_audio.side_effect = (
+            lambda content, path, voice, model: Path(path).write_bytes(
+                content.encode()
+            )
+        )
+        ready_paths = []
+
+        ready_progress = []
+
+        def record_ready(path, part_number, total_parts):
+            self.assertTrue(path.exists())
+            ready_paths.append(path)
+            ready_progress.append((part_number, total_parts))
+
+        with tempfile.TemporaryDirectory() as directory:
+            base_path = Path(directory) / "article.mp3"
+            generated_paths = main.generate_audio_parts(
+                "complete summary",
+                base_path,
+                on_part_ready=record_ready,
+            )
+
+        self.assertEqual(ready_paths, generated_paths)
+        self.assertEqual(ready_progress, [(1, 2), (2, 2)])
+
+    @patch("main.generate_audio")
     @patch("main.split_text_for_tts", return_value=["one", "two", "three"])
     def test_failed_part_stops_generation_and_is_not_completed(
         self, split_text, generate_audio
@@ -315,7 +346,19 @@ class URLProcessingTests(unittest.TestCase):
                 Path(directory) / "article_001.mp3",
                 Path(directory) / "article_002.mp3",
             ]
-            generate_audio_parts.return_value = generated_paths
+
+            def generate_parts(
+                summary, path, voice, model, on_part_ready=None
+            ):
+                for part_number, generated_path in enumerate(
+                    generated_paths, start=1
+                ):
+                    on_part_ready(
+                        generated_path, part_number, len(generated_paths)
+                    )
+                return generated_paths
+
+            generate_audio_parts.side_effect = generate_parts
 
             main.process_single_url(
                 "https://example.com/article", directory, "article.mp3"
@@ -327,6 +370,49 @@ class URLProcessingTests(unittest.TestCase):
             play_mp3.call_args_list,
             [call(str(generated_paths[0])), call(str(generated_paths[1]))],
         )
+
+    @patch("main.print")
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_first_part_plays_while_later_parts_generate(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+        print_mock,
+    ):
+        first_part_played = threading.Event()
+        generated_paths = [Path("article_001.mp3"), Path("article_002.mp3")]
+
+        def play(path):
+            if path == str(generated_paths[0]):
+                first_part_played.set()
+
+        def generate_parts(summary, path, voice, model, on_part_ready=None):
+            on_part_ready(generated_paths[0], 1, 2)
+            self.assertTrue(
+                first_part_played.wait(timeout=1),
+                "Part 1 did not start before part 2 was generated",
+            )
+            on_part_ready(generated_paths[1], 2, 2)
+            return generated_paths
+
+        play_mp3.side_effect = play
+        generate_audio_parts.side_effect = generate_parts
+
+        main.process_single_url(
+            "https://example.com/article", ".", "article.mp3"
+        )
+
+        self.assertEqual(
+            play_mp3.call_args_list,
+            [call(str(generated_paths[0])), call(str(generated_paths[1]))],
+        )
+        self.assertIn(call("Now playing 1 of 2"), print_mock.call_args_list)
+        self.assertIn(call("Now playing 2 of 2"), print_mock.call_args_list)
 
     @patch("main.play_mp3")
     @patch("main.generate_audio_parts")

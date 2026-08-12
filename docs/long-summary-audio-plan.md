@@ -126,7 +126,9 @@ Keep the existing single-request `generate_audio` function responsible for one
 valid TTS chunk. Add an orchestrator such as:
 
 ```python
-generate_audio_parts(summary, base_path, voice, model) -> list[Path]
+generate_audio_parts(
+    summary, base_path, voice, model, on_part_ready=None
+) -> list[Path]
 ```
 
 The orchestrator will:
@@ -135,7 +137,8 @@ The orchestrator will:
 2. Calculate all output paths.
 3. Generate parts sequentially.
 4. Print progress such as `Generating audio part 2 of 5`.
-5. Return paths in playback order after all parts succeed.
+5. Notify `on_part_ready` after each part is atomically completed.
+6. Return paths in playback order after all parts succeed.
 
 Sequential generation is preferred initially because it simplifies ordering,
 avoids rate-limit bursts, and makes failures easier to identify. Parallel
@@ -145,7 +148,8 @@ If a request fails:
 
 - Report the failed part number and preserve already completed part files.
 - Do not print the overall audio-success message.
-- Do not play a knowingly incomplete set.
+- Stop adding new items to the playback queue. Parts completed before the failure
+  may already have played or may finish playing from the queue.
 - Propagate the failure using the application's existing error behavior.
 
 Resuming from existing completed parts can be added later, but filenames and
@@ -154,12 +158,13 @@ change.
 
 ## Playback Flow
 
-Update URL processing to use the ordered paths returned by
-`generate_audio_parts`.
+Update URL processing to run generation and playback as a producer/consumer
+pipeline.
 
-- When playback is enabled, call `play_mp3` once for each path in order.
-- Keep the existing spinner active across the entire sequence, not once per
-  part.
+- When playback is enabled, start a dedicated playback thread before generation.
+- Enqueue each path through `on_part_ready` only after its atomic rename succeeds.
+- Have the playback thread call `play_mp3` once for each queued path in order.
+- Signal the end of the queue and join the playback thread before returning.
 - When `--download-only` is set, generate every file but play none.
 - `--silent` should retain its current meaning and not alter final-audio
   playback behavior.
@@ -215,8 +220,9 @@ Add focused tests for:
 ### Playback
 
 - Generated parts are played in numeric order.
+- The first completed part starts playing before later parts finish generating.
 - `--download-only` skips all playback.
-- Playback does not begin if generation fails partway through.
+- A generation failure stops the queue after already completed parts.
 - The complete summary is saved once when requested.
 
 ## Implementation Sequence
@@ -239,11 +245,12 @@ Add focused tests for:
   TTS input limit.
 - All summary text appears exactly once across the ordered TTS requests.
 - Long outputs create correctly ordered, numbered MP3 files.
-- Playback processes all parts sequentially when enabled.
+- Playback begins with the first completed part and processes all queued parts
+  sequentially while later parts generate.
 - Download-only mode creates all parts without playback.
 - Existing one-part output naming and behavior remain compatible.
-- Failures identify the affected part and never report or play an incomplete
-  result as successful.
+- Failures identify the affected part and never report an incomplete result as
+  successful.
 
 ## Deferred Work
 

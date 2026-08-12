@@ -12,6 +12,8 @@ from urllib.parse import urlparse, unquote
 import anthropic
 import argparse
 import json
+import queue
+import threading
 from halo import Halo
 
 # ANSI escape codes for some colors
@@ -421,6 +423,7 @@ def generate_audio_parts(
     base_path,
     voice="nova",
     model=DEFAULT_TTS_MODEL,
+    on_part_ready=None,
 ):
     chunks = split_text_for_tts(summary, model=model)
     output_paths = audio_part_paths(base_path, len(chunks))
@@ -443,6 +446,8 @@ def generate_audio_parts(
         try:
             generate_audio(chunk, temporary_path, voice, model)
             os.replace(temporary_path, output_path)
+            if on_part_ready is not None:
+                on_part_ready(output_path, part_number, total_parts)
         except Exception:
             temporary_path.unlink(missing_ok=True)
             print_colored(
@@ -452,6 +457,20 @@ def generate_audio_parts(
             raise
 
     return output_paths
+
+
+def play_audio_queue(audio_queue, end_of_queue, playback_errors):
+    try:
+        while True:
+            queued_part = audio_queue.get()
+            if queued_part is end_of_queue:
+                return
+
+            audio_path, part_number, total_parts = queued_part
+            print(f"Now playing {part_number} of {total_parts}")
+            play_mp3(str(audio_path))
+    except Exception as error:
+        playback_errors.append(error)
 
 
 def save_summary(speech_file_path, summary_text):
@@ -511,19 +530,40 @@ def process_single_url(url, output_dir, fixed_filename=None):
         play_mp3('genaudio.mp3')
 
     print(f"Generating Audio with {AUDIO_VOICE} Voice")
-    audio_paths = generate_audio_parts(
-        resp, speech_file_path, AUDIO_VOICE, AUDIO_MODEL
-    )
-    print("Audio generated!")
+    if args.download_only:
+        generate_audio_parts(
+            resp, speech_file_path, AUDIO_VOICE, AUDIO_MODEL
+        )
+        print("Audio generated!")
+    else:
+        audio_queue = queue.Queue()
+        end_of_queue = object()
+        playback_errors = []
+        playback_thread = threading.Thread(
+            target=play_audio_queue,
+            args=(audio_queue, end_of_queue, playback_errors),
+            name="audio-playback",
+        )
+        playback_thread.start()
 
-    if not args.download_only:
-        spinner.text = 'Now Playing'
-        spinner.start()
+        def queue_completed_part(audio_path, part_number, total_parts):
+            audio_queue.put((audio_path, part_number, total_parts))
+
         try:
-            for audio_path in audio_paths:
-                play_mp3(str(audio_path))
+            generate_audio_parts(
+                resp,
+                speech_file_path,
+                AUDIO_VOICE,
+                AUDIO_MODEL,
+                on_part_ready=queue_completed_part,
+            )
+            print("Audio generated!")
         finally:
-            spinner.stop()
+            audio_queue.put(end_of_queue)
+            playback_thread.join()
+
+        if playback_errors:
+            raise RuntimeError("Audio playback failed") from playback_errors[0]
 
 
 def read_file_and_split(file_path):
