@@ -4,3 +4,4 @@ halo==0.0.31
 openai==2.54.0
 pygame==2.6.1
 requests==2.34.2
+tiktoken==0.13.0

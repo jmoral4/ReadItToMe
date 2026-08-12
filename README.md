@@ -18,6 +18,10 @@ Specify Url
 Specify a filename (to reuse the same file. By default one file per webpage is generated)
 > py main.py --fixed-filename "summary.mp3"
 
+Summaries that exceed the text-to-speech limits are saved as ordered parts such as
+`summary_001.mp3`, `summary_002.mp3`, and `summary_003.mp3`. Short summaries keep
+the original `summary.mp3` filename.
+
 Specify a 'playlist' or file with multiple urls, one per line, to process. Can be combined with --silent and --download-only to setup a playlist for later listening. 
 > py main.py --playlist \your\directory\playlist.txt
 
@@ -47,7 +51,10 @@ Disclaimer: I'm not a daily Python coder but ironically the core implementation 
 * Opted for OpenAI's voice - I personally enjoy the natural way they sound including vocal mannerisms. 
 
 ## Practical Notes
-* **MAX_RESPONSE_TOKENS** has a very strong effect on how thorough or concise the summary is. At 720, you'll get a reasonable and detailed overview if the story is brief. I personally use 3072 since I use it for large stories or HackerNews threads. Expand this if you prefer a deeper dive - to the limits of your model. Of course, this has a direct effect on cost-per-query.
+* **MAX_RESPONSE_TOKENS** controls the summarization model's output limit and defaults to 16384 in the example configuration. Larger values can increase summary depth, model cost, generation time, audio duration, and the number of text-to-speech requests. Keep the value within the selected OpenAI, Claude, or Ollama model's supported output limit.
+* Audio generation is chunked independently of **MAX_RESPONSE_TOKENS**. The app targets 3800 characters and 1800 tokens per request, safely below the speech API's 4096-character limit and the `gpt-4o-mini-tts` 2000-token limit. The number of resulting MP3 files depends on the generated text, not directly on the configured summary token limit.
+* `--download-only` generates every numbered part without playing any of them. When playback is enabled, all parts play in numeric order.
+* `--save-summaries` always writes one complete, unsuffixed `.txt` summary even when the audio uses multiple numbered files.
 * In general, models with large context windows produce the most useful summaries.
 * Not all Ollama models support large context sizes.
 * In practice Mistral was passable but most small/medium models (7B or less) did poorly or required tweaking to deliver useful summaries. YMMV!
