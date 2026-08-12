@@ -11,6 +11,7 @@ import tiktoken
 from urllib.parse import urlparse, unquote
 import anthropic
 import argparse
+import _thread
 import json
 import queue
 import sys
@@ -269,6 +270,11 @@ def playback_keyboard_loop(playback_control, stop_event):
                         print("Playback paused")
                     elif paused is False:
                         print("Playback resumed")
+                elif key == "\x03":
+                    playback_control.stop()
+                    stop_event.set()
+                    _thread.interrupt_main()
+                    return
             stop_event.wait(0.05)
     except (OSError, pygame.error) as error:
         print(f"Playback controls unavailable: {error}")
@@ -319,7 +325,7 @@ def start_playback_keyboard_listener(playback_control):
         print(f"Playback controls unavailable: {error}")
         return None
 
-    print("Press Space to pause or resume playback.")
+    print("Press Space to pause or resume playback; Ctrl+C to stop.")
     return listener
 
 

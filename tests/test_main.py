@@ -410,6 +410,24 @@ class PlaybackControlTests(unittest.TestCase):
             [call("Playback paused"), call("Playback resumed")],
         )
 
+    @patch("main._thread.interrupt_main")
+    @patch("main.msvcrt")
+    def test_keyboard_loop_forwards_ctrl_c_to_main_thread(
+        self, msvcrt, interrupt_main
+    ):
+        stop_event = MagicMock()
+        stop_event.is_set.return_value = False
+        msvcrt.kbhit.return_value = True
+        msvcrt.getwch.return_value = "\x03"
+        control = MagicMock()
+
+        main.playback_keyboard_loop(control, stop_event)
+
+        control.stop.assert_called_once_with()
+        stop_event.set.assert_called_once_with()
+        interrupt_main.assert_called_once_with()
+        stop_event.wait.assert_not_called()
+
 
 class URLProcessingTests(unittest.TestCase):
     def setUp(self):

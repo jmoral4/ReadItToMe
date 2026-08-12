@@ -34,7 +34,8 @@ Flags
 * --long  (Favor comprehensive, detailed coverage instead of the concise default. Depending on the source and token limit, this can produce 20+ minutes of audio and increase summarization and text-to-speech API costs.)
 
 During generated-summary playback on Windows, press Space to pause or resume
-from the current position. This control is not started in download-only mode.
+from the current position, or Ctrl+C to stop the app. This control is not started
+in download-only mode.
 
 ### Example (Download a playlist for use in a media player)
 py main.py --playlist C:\git\HNplaylist.txt --download-only --silent
