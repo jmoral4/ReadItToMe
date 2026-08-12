@@ -9,7 +9,7 @@ In these cases, it blows a standard screenreader out of the water.
 ## Features
 * Support for current OpenAI models through the Responses API
 * Support for Anthropic Claude models
-* Support for Ollama models through its OpenAI-compatible API
+* Support for Ollama models through its Responses-compatible API
 
 ## Optional CLI usage
 Specify Url
@@ -42,6 +42,7 @@ py main.py --playlist C:\git\HNplaylist.txt --download-only --silent
 * Add your keys for models. An OpenAI key is _required_ for OpenAI text to speech, which is the main feature of this app.
 * Add your output directory - this is where audio files generated for playback will be stored
 * Add your selected model and model type for text summarization (openai, claude, ollama)
+* Ollama is optional. To use it for summarization, install Ollama 0.13.3 or newer. `OLLAMA_HOST` is also optional and defaults to `http://localhost:11434`; the app uses its `/v1/responses` endpoint.
 * `gpt-5.6-sol` is the recommended OpenAI summarization model. Use `gpt-5.6-terra` for a balance of intelligence and cost, or `gpt-5.6-luna` for cost-sensitive workloads.
 * `gpt-4o-mini-tts` is OpenAI's current speech model. `marin` and `cedar` are the recommended voices.
 

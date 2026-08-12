@@ -262,15 +262,11 @@ class OpenAITests(unittest.TestCase):
         client.chat.completions.create.assert_not_called()
 
     @patch("main.OpenAI")
-    def test_ollama_uses_shared_summary_system_prompt(self, openai):
-        main.OLLAMA_HOST = "http://localhost:11434"
+    def test_ollama_uses_responses_api_with_supported_options(self, openai):
+        main.OLLAMA_HOST = "http://localhost:11434/"
         client = openai.return_value
-        client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(content="A local summary")
-                )
-            ]
+        client.responses.create.return_value = SimpleNamespace(
+            output_text="A local summary"
         )
 
         result = main.talk_to_ai(
@@ -278,18 +274,28 @@ class OpenAITests(unittest.TestCase):
             "local-model",
             main.GREEN,
             api_type="ollama",
+            temperature=0.4,
             max_tokens=500,
+            top_p=0.8,
         )
 
         self.assertEqual(result, "A local summary")
-        request = client.chat.completions.create.call_args.kwargs
-        self.assertEqual(
-            request["messages"][0],
-            {
-                "role": "system",
-                "content": main.DEFAULT_SUMMARY_SYSTEM_PROMPT,
-            },
+        openai.assert_called_once_with(
+            base_url="http://localhost:11434/v1/",
+            api_key="ollama",
         )
+        client.responses.create.assert_called_once()
+        request = client.responses.create.call_args.kwargs
+        self.assertEqual(request["model"], "local-model")
+        self.assertEqual(request["max_output_tokens"], 500)
+        self.assertEqual(request["temperature"], 0.4)
+        self.assertEqual(request["top_p"], 0.8)
+        self.assertIn("Source text", request["input"])
+        self.assertEqual(
+            request["instructions"],
+            main.DEFAULT_SUMMARY_SYSTEM_PROMPT,
+        )
+        client.chat.completions.create.assert_not_called()
 
     @patch("main.OpenAI")
     def test_audio_uses_streaming_speech_api(self, openai):

@@ -34,6 +34,7 @@ TTS_MODEL_MAX_TOKENS = 2000
 TTS_TARGET_MAX_CHARS = 3800
 TTS_TARGET_MAX_TOKENS = 1800
 DEFAULT_TTS_MODEL = "gpt-4o-mini-tts"
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_SUMMARY_SYSTEM_PROMPT = (
     "Create a faithful, comprehensive summary designed to be heard aloud. "
     "Preserve the source's central thesis, key arguments, important evidence, "
@@ -66,8 +67,8 @@ def estimate_tokens(text):
 def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_tokens=16384, top_p=1, frequency_penalty=0,
                presence_penalty=0, system_prompt=None):
     """
-    Summarize content with OpenAI's Responses API, Anthropic, or an
-    OpenAI-compatible local Ollama server.
+    Summarize content with OpenAI's Responses API, Anthropic, or Ollama's
+    Responses-compatible API.
     """
     try:
         if system_prompt is None:
@@ -81,15 +82,16 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
                 "Please synthesize and provide a detailed overview of the "
                 f"following textual content.\n\nContent:\n{content}"
             )
-            base_url = f'{OLLAMA_HOST}/v1/'
+            base_url = f'{OLLAMA_HOST.rstrip("/")}/v1/'
             api_key = 'ollama'
             client = OpenAI(base_url=base_url, api_key=api_key)
             response_params = {
                 "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ]
+                "instructions": system_prompt,
+                "input": prompt,
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p
             }
         elif api_type == 'claude':
             prompt = (
@@ -120,12 +122,9 @@ def talk_to_ai(content, model, color, api_type='openai', temperature=1, max_toke
             }
 
         # Create response based on API type
-        if api_type == 'openai':
+        if api_type in ['openai', 'ollama']:
             response = client.responses.create(**response_params)
             message_content = response.output_text
-        elif api_type == 'ollama':
-            response = client.chat.completions.create(**response_params)
-            message_content = response.choices[0].message.content
         else:  # Claude
             message = client.messages.create(**response_params)
             message_content = "".join(
@@ -589,7 +588,7 @@ if __name__ == "__main__":
         OUTPUT_DIR = config['OUTPUT_DIR']
         SELECTED_MODEL = config['SELECTED_MODEL']
         SELECTED_MODEL_TYPE = config['SELECTED_MODEL_TYPE']
-        OLLAMA_HOST = config['OLLAMA_HOST']
+        OLLAMA_HOST = config.get('OLLAMA_HOST', DEFAULT_OLLAMA_HOST)
         AUDIO_VOICE = config['AUDIO_VOICE']
         AUDIO_MODEL = config.get('AUDIO_MODEL', DEFAULT_TTS_MODEL)
         MAX_TOKENS = config['MAX_RESPONSE_TOKENS']
