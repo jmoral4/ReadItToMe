@@ -13,8 +13,14 @@ import anthropic
 import argparse
 import json
 import queue
+import sys
 import threading
 from halo import Halo
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 # ANSI escape codes for some colors
 RED = "\033[31m"
@@ -52,7 +58,7 @@ DEFAULT_SUMMARY_SYSTEM_PROMPT = (
     "arguments, counterarguments, technical insights, firsthand experiences, "
     "and points of disagreement across the discussion. Represent distinct "
     "viewpoints fairly, omit repetitive or low-signal comments, and do not treat "
-    "comment popularity as evidence that a claim is correct."
+    "comment popularity as evidence that a claim is correct. Do not shy away from controversy however."
 )
 
 
@@ -163,13 +169,158 @@ def get_web_page_contents(url):
         return str(e)
 
 
-def play_mp3(filepath):
+class PlaybackControl:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._paused = False
+        self._active = False
+        self._stopped = False
+
+    @property
+    def paused(self):
+        with self._lock:
+            return self._paused
+
+    def start_track(self, filepath):
+        with self._lock:
+            if self._stopped:
+                return False
+
+            pygame.mixer.init()
+            pygame.mixer.music.load(filepath)
+            pygame.mixer.music.play()
+            self._paused = False
+            self._active = True
+            return True
+
+    def toggle(self):
+        with self._lock:
+            if not self._active or self._stopped:
+                return None
+
+            if self._paused:
+                pygame.mixer.music.unpause()
+                self._paused = False
+            else:
+                pygame.mixer.music.pause()
+                self._paused = True
+            return self._paused
+
+    def should_continue(self):
+        with self._lock:
+            if not self._active or self._stopped:
+                return False
+            if self._paused:
+                return True
+            if pygame.mixer.music.get_busy():
+                return True
+
+            self._active = False
+            return False
+
+    def finish_track(self):
+        with self._lock:
+            self._active = False
+            self._paused = False
+
+    def stop(self):
+        with self._lock:
+            self._stopped = True
+            self._paused = False
+            if not self._active:
+                return
+
+            self._active = False
+            try:
+                pygame.mixer.music.stop()
+            except pygame.error as error:
+                print(f"Unable to stop audio playback: {error}")
+
+
+def playback_keyboard_loop(playback_control, stop_event):
     try:
-        pygame.mixer.init()
-        pygame.mixer.music.load(filepath)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():  # Wait for the music to finish playing
-            pygame.time.Clock().tick(10)  # Tick the clock to wait
+        while not stop_event.is_set():
+            if msvcrt.kbhit():
+                key = msvcrt.getwch()
+                if key in ("\x00", "\xe0"):
+                    msvcrt.getwch()
+                elif key == " ":
+                    paused = playback_control.toggle()
+                    if paused is True:
+                        print("Playback paused")
+                    elif paused is False:
+                        print("Playback resumed")
+            stop_event.wait(0.05)
+    except (OSError, pygame.error) as error:
+        print(f"Playback controls unavailable: {error}")
+
+
+class PlaybackKeyboardListener:
+    def __init__(self, playback_control):
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(
+            target=playback_keyboard_loop,
+            args=(playback_control, self._stop_event),
+            name="playback-keyboard",
+            daemon=True,
+        )
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        self._thread.join()
+
+
+def start_playback_keyboard_listener(playback_control):
+    if msvcrt is None:
+        print(
+            "Playback controls unavailable: "
+            "Windows console input is not supported on this platform."
+        )
+        return None
+
+    try:
+        if not sys.stdin.isatty():
+            print(
+                "Playback controls unavailable: "
+                "console input is not interactive."
+            )
+            return None
+        msvcrt.kbhit()
+    except (AttributeError, OSError) as error:
+        print(f"Playback controls unavailable: {error}")
+        return None
+
+    listener = PlaybackKeyboardListener(playback_control)
+    try:
+        listener.start()
+    except RuntimeError as error:
+        print(f"Playback controls unavailable: {error}")
+        return None
+
+    print("Press Space to pause or resume playback.")
+    return listener
+
+
+def play_mp3(filepath, playback_control=None):
+    try:
+        if playback_control is None:
+            pygame.mixer.init()
+            pygame.mixer.music.load(filepath)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+            return
+
+        if not playback_control.start_track(filepath):
+            return
+        try:
+            while playback_control.should_continue():
+                pygame.time.Clock().tick(10)
+        finally:
+            playback_control.finish_track()
     except pygame.error as e:
         print(f"An error occurred: {e}")
 
@@ -458,18 +609,28 @@ def generate_audio_parts(
     return output_paths
 
 
-def play_audio_queue(audio_queue, end_of_queue, playback_errors):
+def play_audio_queue(
+    audio_queue,
+    end_of_queue,
+    playback_errors,
+    playback_control,
+    playback_cancelled,
+):
     try:
         while True:
             queued_part = audio_queue.get()
-            if queued_part is end_of_queue:
+            if queued_part is end_of_queue or playback_cancelled.is_set():
                 return
 
             audio_path, part_number, total_parts = queued_part
             print(f"Now playing {part_number} of {total_parts}")
-            play_mp3(str(audio_path))
+            play_mp3(
+                str(audio_path),
+                playback_control=playback_control,
+            )
     except Exception as error:
         playback_errors.append(error)
+        playback_control.stop()
 
 
 def save_summary(speech_file_path, summary_text):
@@ -538,16 +699,26 @@ def process_single_url(url, output_dir, fixed_filename=None):
         audio_queue = queue.Queue()
         end_of_queue = object()
         playback_errors = []
+        playback_cancelled = threading.Event()
+        playback_control = PlaybackControl()
         playback_thread = threading.Thread(
             target=play_audio_queue,
-            args=(audio_queue, end_of_queue, playback_errors),
+            args=(
+                audio_queue,
+                end_of_queue,
+                playback_errors,
+                playback_control,
+                playback_cancelled,
+            ),
             name="audio-playback",
         )
         playback_thread.start()
+        keyboard_listener = start_playback_keyboard_listener(playback_control)
 
         def queue_completed_part(audio_path, part_number, total_parts):
             audio_queue.put((audio_path, part_number, total_parts))
 
+        generation_completed = False
         try:
             generate_audio_parts(
                 resp,
@@ -556,10 +727,19 @@ def process_single_url(url, output_dir, fixed_filename=None):
                 AUDIO_MODEL,
                 on_part_ready=queue_completed_part,
             )
+            generation_completed = True
             print("Audio generated!")
         finally:
             audio_queue.put(end_of_queue)
-            playback_thread.join()
+            if not generation_completed:
+                playback_cancelled.set()
+                playback_control.stop()
+            try:
+                playback_thread.join()
+            finally:
+                playback_control.stop()
+                if keyboard_listener is not None:
+                    keyboard_listener.stop()
 
         if playback_errors:
             raise RuntimeError("Audio playback failed") from playback_errors[0]

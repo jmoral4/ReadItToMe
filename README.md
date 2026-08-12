@@ -32,6 +32,9 @@ Flags
 * --silent  (Don't vocalize the actions being performed)
 * --download-only  (Only download the audio files, don't play them back (useful for bulk creating a playlist))
 
+During generated-summary playback on Windows, press Space to pause or resume
+from the current position. This control is not started in download-only mode.
+
 ### Example (Download a playlist for use in a media player)
 py main.py --playlist C:\git\HNplaylist.txt --download-only --silent
 

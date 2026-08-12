@@ -3,7 +3,7 @@ import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 import main
 
@@ -317,6 +317,88 @@ class OpenAITests(unittest.TestCase):
         response.stream_to_file.assert_called_once_with(output)
 
 
+class PlaybackControlTests(unittest.TestCase):
+    def setUp(self):
+        self.control = main.PlaybackControl()
+
+    @patch("main.pygame.mixer.music.unpause")
+    @patch("main.pygame.mixer.music.pause")
+    def test_space_toggles_pause_and_resume(self, pause, unpause):
+        with patch("main.pygame.mixer.init"), patch(
+            "main.pygame.mixer.music.load"
+        ), patch("main.pygame.mixer.music.play"):
+            self.control.start_track("summary.mp3")
+
+        self.assertTrue(self.control.toggle())
+        self.assertTrue(self.control.paused)
+        self.assertFalse(self.control.toggle())
+        self.assertFalse(self.control.paused)
+        pause.assert_called_once_with()
+        unpause.assert_called_once_with()
+
+    @patch("main.pygame.mixer.music.get_busy", return_value=False)
+    @patch("main.pygame.mixer.music.pause")
+    def test_paused_track_remains_active_when_mixer_is_not_busy(
+        self, pause, get_busy
+    ):
+        with patch("main.pygame.mixer.init"), patch(
+            "main.pygame.mixer.music.load"
+        ), patch("main.pygame.mixer.music.play"):
+            self.control.start_track("summary.mp3")
+
+        self.control.toggle()
+
+        self.assertTrue(self.control.should_continue())
+        get_busy.assert_not_called()
+
+    @patch("main.print")
+    @patch("main.msvcrt")
+    def test_keyboard_loop_ignores_non_space_keys(self, msvcrt, print_mock):
+        stop_event = MagicMock()
+        stop_event.is_set.side_effect = [False, True]
+        msvcrt.kbhit.return_value = True
+        msvcrt.getwch.return_value = "x"
+        control = MagicMock()
+
+        main.playback_keyboard_loop(control, stop_event)
+
+        control.toggle.assert_not_called()
+        print_mock.assert_not_called()
+
+    @patch("main.print")
+    @patch("main.msvcrt")
+    def test_keyboard_loop_consumes_extended_keys(self, msvcrt, print_mock):
+        stop_event = MagicMock()
+        stop_event.is_set.side_effect = [False, True]
+        msvcrt.kbhit.return_value = True
+        msvcrt.getwch.side_effect = ["\xe0", " "]
+        control = MagicMock()
+
+        main.playback_keyboard_loop(control, stop_event)
+
+        control.toggle.assert_not_called()
+        self.assertEqual(msvcrt.getwch.call_count, 2)
+        print_mock.assert_not_called()
+
+    @patch("main.print")
+    @patch("main.msvcrt")
+    def test_keyboard_loop_reports_pause_and_resume(self, msvcrt, print_mock):
+        stop_event = MagicMock()
+        stop_event.is_set.side_effect = [False, False, True]
+        msvcrt.kbhit.return_value = True
+        msvcrt.getwch.side_effect = [" ", " "]
+        control = MagicMock()
+        control.toggle.side_effect = [True, False]
+
+        main.playback_keyboard_loop(control, stop_event)
+
+        self.assertEqual(control.toggle.call_count, 2)
+        self.assertEqual(
+            print_mock.call_args_list,
+            [call("Playback paused"), call("Playback resumed")],
+        )
+
+
 class URLProcessingTests(unittest.TestCase):
     def setUp(self):
         main.args = SimpleNamespace(
@@ -330,6 +412,9 @@ class URLProcessingTests(unittest.TestCase):
         main.AUDIO_VOICE = "marin"
         main.AUDIO_MODEL = "gpt-4o-mini-tts"
         main.spinner = MagicMock()
+        listener_patcher = patch("main.start_playback_keyboard_listener")
+        self.start_listener = listener_patcher.start()
+        self.addCleanup(listener_patcher.stop)
 
     @patch("main.save_summary")
     @patch("main.play_mp3")
@@ -374,7 +459,16 @@ class URLProcessingTests(unittest.TestCase):
 
         self.assertEqual(
             play_mp3.call_args_list,
-            [call(str(generated_paths[0])), call(str(generated_paths[1]))],
+            [
+                call(
+                    str(generated_paths[0]),
+                    playback_control=ANY,
+                ),
+                call(
+                    str(generated_paths[1]),
+                    playback_control=ANY,
+                ),
+            ],
         )
 
     @patch("main.print")
@@ -393,7 +487,7 @@ class URLProcessingTests(unittest.TestCase):
         first_part_played = threading.Event()
         generated_paths = [Path("article_001.mp3"), Path("article_002.mp3")]
 
-        def play(path):
+        def play(path, playback_control=None):
             if path == str(generated_paths[0]):
                 first_part_played.set()
 
@@ -415,7 +509,16 @@ class URLProcessingTests(unittest.TestCase):
 
         self.assertEqual(
             play_mp3.call_args_list,
-            [call(str(generated_paths[0])), call(str(generated_paths[1]))],
+            [
+                call(
+                    str(generated_paths[0]),
+                    playback_control=ANY,
+                ),
+                call(
+                    str(generated_paths[1]),
+                    playback_control=ANY,
+                ),
+            ],
         )
         self.assertIn(call("Now playing 1 of 2"), print_mock.call_args_list)
         self.assertIn(call("Now playing 2 of 2"), print_mock.call_args_list)
@@ -438,6 +541,57 @@ class URLProcessingTests(unittest.TestCase):
         )
 
         play_mp3.assert_not_called()
+
+    @patch("main.start_playback_keyboard_listener")
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_summary_playback_starts_and_stops_keyboard_listener(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+        start_listener,
+    ):
+        listener = start_listener.return_value
+        generated_path = Path("article.mp3")
+
+        def generate_parts(summary, path, voice, model, on_part_ready=None):
+            on_part_ready(generated_path, 1, 1)
+            return [generated_path]
+
+        generate_audio_parts.side_effect = generate_parts
+
+        main.process_single_url(
+            "https://example.com/article", ".", "article.mp3"
+        )
+
+        start_listener.assert_called_once()
+        listener.stop.assert_called_once_with()
+
+    @patch("main.start_playback_keyboard_listener")
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_download_only_does_not_start_keyboard_listener(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+        start_listener,
+    ):
+        main.args.download_only = True
+        generate_audio_parts.return_value = [Path("article.mp3")]
+
+        main.process_single_url(
+            "https://example.com/article", ".", "article.mp3"
+        )
+
+        start_listener.assert_not_called()
 
     @patch("main.print")
     @patch("main.play_mp3")
@@ -463,6 +617,86 @@ class URLProcessingTests(unittest.TestCase):
         play_mp3.assert_not_called()
         printed_lines = [args[0] for args, _ in print_mock.call_args_list]
         self.assertNotIn("Audio generated!", printed_lines)
+
+    @patch("main.start_playback_keyboard_listener")
+    @patch("main.play_mp3")
+    @patch(
+        "main.generate_audio_parts",
+        side_effect=RuntimeError("part generation failed"),
+    )
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_generation_failure_stops_keyboard_listener(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+        start_listener,
+    ):
+        listener = start_listener.return_value
+
+        with self.assertRaisesRegex(RuntimeError, "part generation failed"):
+            main.process_single_url(
+                "https://example.com/article", ".", "article.mp3"
+            )
+
+        listener.stop.assert_called_once_with()
+
+    @patch("main.play_mp3", side_effect=RuntimeError("playback failed"))
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_playback_failure_stops_keyboard_listener(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+    ):
+        listener = self.start_listener.return_value
+
+        def generate_parts(summary, path, voice, model, on_part_ready=None):
+            on_part_ready(Path("article.mp3"), 1, 1)
+            return [Path("article.mp3")]
+
+        generate_audio_parts.side_effect = generate_parts
+
+        with self.assertRaisesRegex(RuntimeError, "Audio playback failed"):
+            main.process_single_url(
+                "https://example.com/article", ".", "article.mp3"
+            )
+
+        listener.stop.assert_called_once_with()
+
+    @patch("main.play_mp3")
+    @patch("main.generate_audio_parts")
+    @patch("main.talk_to_ai", return_value="complete summary")
+    @patch("main.get_web_page_contents", return_value="page contents")
+    def test_each_playlist_item_gets_fresh_playback_state(
+        self,
+        get_contents,
+        talk_to_ai,
+        generate_audio_parts,
+        play_mp3,
+    ):
+        generate_audio_parts.return_value = []
+
+        main.process_single_url(
+            "https://example.com/first", ".", "first.mp3"
+        )
+        main.process_single_url(
+            "https://example.com/second", ".", "second.mp3"
+        )
+
+        controls = [
+            listener_call.args[0]
+            for listener_call in self.start_listener.call_args_list
+        ]
+        self.assertEqual(len(controls), 2)
+        self.assertIsNot(controls[0], controls[1])
+        self.assertFalse(controls[0].paused)
+        self.assertFalse(controls[1].paused)
 
 
 if __name__ == "__main__":
